@@ -3,11 +3,11 @@
 #include <std_srvs/Empty.h>
 #include <lwr_controllers/CartesianImpedancePoint.h>
 #include <tf/transform_listener.h>
-#include <wg_planning/wall_grasp_initialize.h>
 
 #include <rviz_visual_tools/rviz_visual_tools.h>
 rviz_visual_tools::RvizVisualToolsPtr visual_tools_;
-ros::Publisher *pub_reference;
+ros::Publisher pub_reference;
+ros::Publisher pub_pose;
 lwr_controllers::CartesianImpedancePoint wp;
 tf::TransformListener *tf_l;
 
@@ -21,14 +21,16 @@ void publishStuff(const geometry_msgs::PoseConstPtr& pose_msgs)
     visual_tools_->publishAxis(*pose_msgs);
     
     wp.x_FRI = *pose_msgs;
-    pub_reference->publish(wp);
+    pub_reference.publish(wp);
     ros::spinOnce();
 
 }
 
-bool get_initial_transformation(wg_planning::wall_grasp_initialize::Request &req, wg_planning::wall_grasp_initialize::Response &res)
+// bool get_initial_transformation(wg_planning::wall_grasp_initialize::Request &req, wg_planning::wall_grasp_initialize::Response &res)
+bool get_initial_transformation(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
 {
-    tf_l->waitForTransform("right_arm_7_link","vito_anchor",ros::Time(0), ros::Duration(1.0));
+    if(!tf_l->waitForTransform("right_arm_7_link","vito_anchor",ros::Time(0), ros::Duration(1.0)))
+        return false;
     
     tf::StampedTransform transform;
     tf_l->lookupTransform("vito_anchor", "right_arm_7_link", ros::Time(0), transform);
@@ -42,13 +44,16 @@ bool get_initial_transformation(wg_planning::wall_grasp_initialize::Request &req
     transform.getRotation().z() << "]; "<<
     std::endl;
     
-    res.World_ee.position.x = transform.getOrigin().x();
-    res.World_ee.position.y = transform.getOrigin().y();
-    res.World_ee.position.z = transform.getOrigin().z();
-    res.World_ee.orientation.w = transform.getRotation().w();
-    res.World_ee.orientation.x = transform.getRotation().x();
-    res.World_ee.orientation.y = transform.getRotation().y();
-    res.World_ee.orientation.z = transform.getRotation().z();
+    geometry_msgs::Pose World_ee;
+    World_ee.position.x = transform.getOrigin().x();
+    World_ee.position.y = transform.getOrigin().y();
+    World_ee.position.z = transform.getOrigin().z();
+    World_ee.orientation.w = transform.getRotation().w();
+    World_ee.orientation.x = transform.getRotation().x();
+    World_ee.orientation.y = transform.getRotation().y();
+    World_ee.orientation.z = transform.getRotation().z();
+    
+    pub_pose.publish(World_ee);
     
     return true;
 }
@@ -60,8 +65,8 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     ros::Subscriber sub_waypoints = nh.subscribe("wg_pose_reference", 10, &publishStuff);
     ros::ServiceServer service = nh.advertiseService("get_init_transformation", get_initial_transformation);
-    ros::Publisher tmp_pub = nh.advertise<lwr_controllers::CartesianImpedancePoint>("/right_arm/cartesian_impedance_controller/command",1, false);
-    pub_reference =  &tmp_pub;
+    pub_reference = nh.advertise<lwr_controllers::CartesianImpedancePoint>("/right_arm/cartesian_impedance_controller/command",1, false);
+    pub_pose = nh.advertise<geometry_msgs::Pose>("wall_grasp_init_ee_pose",1, false);
     tf_l =  new tf::TransformListener;
     
     wp.k_FRI.x = 800.0;
