@@ -23,6 +23,19 @@
 *.a
 *.lib
 
+# build folder
+build/
+
+# kdev projects
+*.kdev4
+.kdev_include_paths
+
+# temp
+*~
+
+#other files
+*.orig
+*.user
 # Executables
 *.exe
 *.out
